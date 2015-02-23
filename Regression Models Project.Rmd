@@ -1,0 +1,137 @@
+---
+title: "Regression Models Course Project"
+output: html_document
+---
+Loading required packages
+
+```{r results='hide', message=FALSE, warning=FALSE}
+library("ggplot2")
+library(dplyr)
+library(Hmisc)
+library(reshape2)
+library(gridExtra)
+```
+
+Loading mtcars dataset and coverting the required variables to factors
+
+```{r results='hide', message=FALSE, warning=FALSE}
+data(mtcars)
+mtcars <- mutate(mtcars,am = as.factor(am),cyl = as.factor(cyl),gear = as.factor(gear),
+                 carb = as.factor(carb),vs = as.factor(vs))
+```
+
+Lets check if mpg is different for automatic and manual transimission cars using a T-test
+Null hypothesis will be no difference in mean MPG between the two groups
+p-value is less than 0.05,null hypothesis is rejected and we can confirm that mean mpg for automatic and manual cars are different
+Estimated mean MPG of manual transmission cars is 7 more than automatic transmission cars 
+
+```{r}
+ttest_am <- t.test(mpg ~ am,data=mtcars)
+ttest_am$p.value
+ttest_am$estimate
+```
+
+To quantify the MPG difference we need to,
+- explore the data to understand if there are other variables responsible for variation in mpg
+- build regression models to estimate MPG difference based on am
+
+Data exploration
+- Box plot reveals that manual transmission cars have high MPG
+- Automatic transmission cars tend to have high mean weight, high mean hp, low mean gear, high number of cylinders
+- There is relationship b/w mpg and disp,hp,wt,drat
+- Variation in MPG can not be explained only by transmission type
+- correlation matrix reveals 
+
+```{r warning=FALSE}
+am_summary <- mtcars %>%
+  group_by(am) %>%
+  summarise(count = n(),cyl=mean(cyl)*100,disp=mean(disp),hp=mean(hp),drat=mean(drat)*100,wt=mean(wt)*100,
+            qsec=mean(qsec)*10,vs=mean(vs)*1000,gear=mean(gear)*100,carb=mean(carb)*100) # scaling by a factor of 10/100 or 1000 to have all variables in the same range
+t <- as.data.frame(t(am_summary))
+t <- t[-1, ]
+colnames(t) <- c("Automatic","Manual")
+t$name <- rownames(t)
+mdata <- melt(t,id=c("name"))
+mdata$value1 <- as.numeric(as.character(mdata$value))
+
+boxplot(mtcars$mpg ~ mtcars$am, xlab="Transmission (0 = Automatic, 1 = Manual)", ylab="MPG",
+        main="Boxplot of MPG vs. Transmission")
+ggplot(mdata,aes(name,value1,fill=variable))+
+  geom_bar(position="dodge",stat="identity") 
+plot1 <- qplot(wt,mpg,data = mtcars,color = am)
+plot2 <- qplot(hp,mpg,data = mtcars,color = am)
+plot3 <- qplot(drat,mpg,data = mtcars,color = am)
+plot4 <- qplot(cyl,mpg,data = mtcars,color = am)
+plot5 <- qplot(disp,mpg,data = mtcars,color = am)
+grid.arrange(plot1,plot2,plot3,plot4,plot5,ncol=2)
+```
+```{r}
+mtcars_corr_matrix <- rcorr(as.matrix(mtcars))
+corr_mpg <- as.data.frame(mtcars_corr_matrix$r)
+corr_mpg$name <- rownames(corr_mpg)
+corr_mpg[corr_mpg$name == "mpg",-12]
+```
+
+Regression Models
+
+- model based on am explains only 33.8% of variantion so more varibles need to be included to quantify mpg variation
+```{r}
+fit_am <- lm(mpg ~ am,data=mtcars)
+summary(fit_am)$adj.r.squared
+```
+- model based on all varibles explains 78% of variation but none of the variables are statistically significant in explaining the relationship
+
+```{r}
+fit_allvars <- lm(mpg ~ .,data=mtcars)
+summary(fit_allvars)$adj.r.squared
+```
+- using stepwise backward selection we end up on mpg ~ wt + qsec + am and this model explains 83% of variance
+```{r results = 'hide'}
+stepModel <- step(fit_allvars, k=log(nrow(mtcars)))
+```
+```{r}
+stepModel$call
+summary(stepModel)$adj.r.squared
+```
+- But there is an interaction between am and hp/wt/disp so building a model with interaction b/w wt & am
+```{r}
+fit_am_wt_interaction <- lm(mpg ~ wt + qsec + am + wt:am ,data=mtcars )
+summary(fit_am_wt_interaction)$adj.r.squared
+```
+- Model selection
+```{r results = 'hide'}
+anova(fit_am, fit_allvars, stepModel, fit_am_wt_interaction)
+confint(fit_am_wt_interaction) # results hidde
+```
+- Model with higher explainaibilty based on r-square is selected
+```{r}
+summary(fit_am_wt_interaction)$coef
+```
+
+Thus, the result shows that when “wt” (weight lb/1000) and “qsec” (1/4 mile time) remain constant, cars
+with manual transmission add 14.079 + (-4.141)*wt more MPG (miles per gallon) on average than cars with
+automatic transmission. That is, a manual transmitted car that weighs 2000 lbs have 5.797 more MPG than
+an automatic transmitted car that has both the same weight and 1/4 mile time.
+
+Residual Analysis and Diagnostics
+Please refer to the Appendix: Figures section for the plots. According to the residual plots, we can verify
+the following underlying assumptions:
+- The Residuals vs. Fitted plot shows no consistent pattern, supporting the accuracy of the independence
+assumption.
+- The Normal Q-Q plot indicates that the residuals are normally distributed because the points lie closely
+to the line.
+- The Scale-Location plot confirms the constant variance assumption, as the points are randomly distributed.
+- The Residuals vs. Leverage argues that no outliers are present, as all values fall well within the 0.5 bands
+- As for the Dfbetas, the measure of how much an observation has effected the estimate of a regression coefficient,
+we get the following result:
+
+```{r}
+sum((abs(dfbetas(fit_am_wt_interaction)))>1)
+```
+
+- Residual Plots
+
+```{r}
+par(mfrow = c(2, 2))
+plot(fit_am_wt_interaction)
+```
