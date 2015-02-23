@@ -2,6 +2,15 @@
 title: "Regression Models Course Project"
 output: html_document
 ---
+Executive Summary
+
+- Exploratory Data Analysis show that mpg is distributed normally with no outliers
+- hp,disp,wt are negatively correlated with mpg and drat is positively correlated
+- Box plot of MPG reveals that MPG is higher for Manual transmission than Automatic trasmission
+- Hypothesis testing confirms that there is significant difference in mean mpg between Manual and Automatic transmission
+- Mutlivariate model built on am,wt & qsec to predict mpg explains 84% of the variance
+- manual transmitted car that weighs 2000 lbs have 5.797 more MPG than an automatic transmitted car with same weight and qsec
+
 Loading required packages
 
 ```{r results='hide', message=FALSE, warning=FALSE}
@@ -40,7 +49,6 @@ Data exploration
 - Automatic transmission cars tend to have high mean weight, high mean hp, low mean gear, high number of cylinders
 - There is relationship b/w mpg and disp,hp,wt,drat
 - Variation in MPG can not be explained only by transmission type
-- correlation matrix reveals 
 
 ```{r warning=FALSE}
 am_summary <- mtcars %>%
